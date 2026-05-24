@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sistema Prestamos</title>
+<title>Gestion Préstamos</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -132,15 +132,16 @@ tr:hover td{background:rgba(255,255,255,.02)}
 <div class="app">
   <nav class="sidebar">
     <div class="logo">
-      <div class="logo-title">Prestamos</div>
+      <div class="logo-title">Préstamos</div>
     </div>
     <div class="nav">
-      <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="nav-icon"></span> Dashboard</div>
-      <div class="nav-item" onclick="showPage('caja',this)"><span class="nav-icon"></span> Caja</div>
-      <div class="nav-item" onclick="showPage('clientes',this)"><span class="nav-icon"></span> Clientes</div>
-      <div class="nav-item" onclick="showPage('prestamos',this)"><span class="nav-icon"></span> Préstamos</div>
-      <div class="nav-item" onclick="showPage('pagos',this)"><span class="nav-icon"></span> Pagos</div>
-      <div class="nav-item" onclick="showPage('calculadora',this)"><span class="nav-icon"></span> Calculadora</div>
+      <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="nav-icon">📊</span> Dashboard</div>
+      <div class="nav-item" onclick="showPage('caja',this)"><span class="nav-icon">🏦</span> Caja</div>
+      <div class="nav-item" onclick="showPage('clientes',this)"><span class="nav-icon">👥</span> Clientes</div>
+      <div class="nav-item" onclick="showPage('prestamos',this)"><span class="nav-icon">💸</span> Préstamos</div>
+      <div class="nav-item" onclick="showPage('pagos',this)"><span class="nav-icon">✅</span> Pagos</div>
+      <div class="nav-item" onclick="showPage('reportes',this)"><span class="nav-icon">📋</span> Reportes</div>
+      <div class="nav-item" onclick="showPage('calculadora',this)"><span class="nav-icon">🧮</span> Calculadora</div>
     </div>
   </nav>
 
@@ -298,6 +299,66 @@ tr:hover td{background:rgba(255,255,255,.02)}
         </div>
       </div>
 
+      <!-- REPORTES -->
+      <div id="page-reportes" class="page">
+        <div class="page-header">
+          <div><div class="page-title">Reportes</div><div class="page-sub">Vencimientos, mora y cobros pendientes</div></div>
+          <button class="btn btn-sm" onclick="loadReportes()">↻ Actualizar</button>
+        </div>
+
+        <!-- ALERTAS RÁPIDAS -->
+        <div class="metrics metrics-4" id="rep-metrics">
+          <div class="metric red"><div class="metric-label">⚠️ Vencidos</div><div class="metric-value" id="rep-vencidos">—</div><div class="metric-sub">cuotas atrasadas</div></div>
+          <div class="metric"><div class="metric-label" style="color:var(--yellow)">🕐 Vencen este mes</div><div class="metric-value" id="rep-este-mes">—</div><div class="metric-sub">próximos a vencer</div></div>
+          <div class="metric"><div class="metric-label">📅 Vencen próximo mes</div><div class="metric-value" id="rep-prox-mes">—</div><div class="metric-sub">para planificar</div></div>
+          <div class="metric green"><div class="metric-label">✅ Al día</div><div class="metric-value" id="rep-al-dia">—</div><div class="metric-sub">sin atrasos</div></div>
+        </div>
+
+        <!-- VENCIDOS / EN MORA -->
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <div class="card-title" style="margin:0;color:var(--red)">⚠️ Cuotas vencidas / En mora</div>
+            <span class="badge badge-red" id="rep-mora-total">—</span>
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Cliente</th><th>Monto original</th><th>Saldo pendiente</th><th>Cuota</th><th>Días vencido</th><th>Última cuota esperada</th><th>Acción</th></tr></thead>
+            <tbody id="rep-tabla-mora"><tr><td colspan="7"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
+          </table></div>
+        </div>
+
+        <!-- VENCEN ESTE MES -->
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <div class="card-title" style="margin:0;color:var(--yellow)">🕐 Vencen este mes</div>
+            <span class="badge badge-yellow" id="rep-mes-total">—</span>
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Cliente</th><th>Saldo</th><th>Cuota mensual</th><th>Fecha de cuota</th><th>Días restantes</th><th>Teléfono</th></tr></thead>
+            <tbody id="rep-tabla-mes"><tr><td colspan="6"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
+          </table></div>
+        </div>
+
+        <!-- VENCEN PRÓXIMO MES -->
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <div class="card-title" style="margin:0">📅 Vencen el próximo mes</div>
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Cliente</th><th>Saldo</th><th>Cuota mensual</th><th>Fecha de cuota</th><th>Teléfono</th></tr></thead>
+            <tbody id="rep-tabla-prox"><tr><td colspan="5"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
+          </table></div>
+        </div>
+
+        <!-- TODOS LOS ACTIVOS -->
+        <div class="card">
+          <div class="card-title">📊 Todos los préstamos activos</div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Cliente</th><th>Monto original</th><th>Saldo</th><th>Cuota</th><th>Tasa</th><th>Próxima cuota</th><th>Estado</th></tr></thead>
+            <tbody id="rep-tabla-todos"><tr><td colspan="7"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
+          </table></div>
+        </div>
+      </div>
+
       <!-- CALCULADORA -->
       <div id="page-calculadora" class="page">
         <div class="page-header">
@@ -354,7 +415,7 @@ function showPage(id, el) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   el.classList.add('active');
-  const loaders = {dashboard: loadDashboard, caja: loadCaja, clientes: loadClientes, prestamos: loadPrestamos, pagos: loadPagos};
+  const loaders = {dashboard: loadDashboard, caja: loadCaja, clientes: loadClientes, prestamos: loadPrestamos, pagos: loadPagos, reportes: loadReportes};
   if (loaders[id]) loaders[id]();
 }
 
@@ -657,6 +718,137 @@ function calcular() {
   document.getElementById('r-total').textContent=fmt(cuota*plazo);
   document.getElementById('r-intereses').textContent=fmt(cuota*plazo-monto);
   document.getElementById('calc-tabla').innerHTML=rows.map(r=>`<tr><td>${r[0]}</td><td class="mono">${fmt(r[1])}</td><td class="mono" style="color:var(--green)">${fmt(r[2])}</td><td class="mono">${fmt(r[3])}</td><td class="mono">${fmt(r[4])}</td></tr>`).join('');
+}
+
+// ===================== REPORTES =====================
+async function loadReportes() {
+  const { data: prestamos } = await sb
+    .from('prestamos')
+    .select('*, clientes(nombre, telefono)')
+    .neq('estado', 'cancelado')
+    .order('fecha_inicio');
+
+  const { data: pagos } = await sb
+    .from('pagos')
+    .select('prestamo_id, fecha')
+    .order('fecha', { ascending: false });
+
+  const hoy = new Date();
+  hoy.setHours(0,0,0,0);
+  const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const finMes    = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+  const inicioProx = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1);
+  const finProx    = new Date(hoy.getFullYear(), hoy.getMonth() + 2, 0);
+
+  // Para cada préstamo, calcular la próxima fecha de cuota esperada
+  // basándonos en fecha_inicio + cantidad de pagos realizados
+  const pagosPorPrestamo = {};
+  (pagos||[]).forEach(p => {
+    if (!pagosPorPrestamo[p.prestamo_id]) pagosPorPrestamo[p.prestamo_id] = [];
+    pagosPorPrestamo[p.prestamo_id].push(p.fecha);
+  });
+
+  const enriched = (prestamos||[]).map(p => {
+    const inicio = new Date(p.fecha_inicio);
+    const cantPagos = (pagosPorPrestamo[p.id]||[]).length;
+    // Próxima cuota = fecha_inicio + (pagos realizados + 1) meses
+    const proxCuota = new Date(inicio);
+    proxCuota.setMonth(proxCuota.getMonth() + cantPagos + 1);
+    proxCuota.setHours(0,0,0,0);
+    const diasDiff = Math.round((proxCuota - hoy) / 86400000);
+    return { ...p, proxCuota, diasDiff };
+  });
+
+  const vencidos   = enriched.filter(p => p.diasDiff < 0);
+  const esteMes    = enriched.filter(p => p.proxCuota >= inicioMes && p.proxCuota <= finMes && p.diasDiff >= 0);
+  const proxMes    = enriched.filter(p => p.proxCuota >= inicioProx && p.proxCuota <= finProx);
+  const alDia      = enriched.filter(p => p.diasDiff >= 0 && !esteMes.includes(p) && !proxMes.includes(p));
+
+  // Métricas
+  document.getElementById('rep-vencidos').textContent  = vencidos.length;
+  document.getElementById('rep-este-mes').textContent  = esteMes.length;
+  document.getElementById('rep-prox-mes').textContent  = proxMes.length;
+  document.getElementById('rep-al-dia').textContent    = alDia.length;
+  document.getElementById('rep-mora-total').textContent = fmt(vencidos.reduce((s,p)=>s+parseFloat(p.saldo),0));
+  document.getElementById('rep-mes-total').textContent  = fmt(esteMes.reduce((s,p)=>s+parseFloat(p.cuota_mensual),0));
+
+  const fmtFecha = d => d.toLocaleDateString('es-PY', {day:'2-digit',month:'2-digit',year:'numeric'});
+
+  // Tabla mora / vencidos
+  const tbMora = document.getElementById('rep-tabla-mora');
+  if (!vencidos.length) {
+    tbMora.innerHTML = '<tr><td colspan="7"><div class="empty">🎉 Sin cuotas vencidas.</div></td></tr>';
+  } else {
+    tbMora.innerHTML = vencidos
+      .sort((a,b) => a.diasDiff - b.diasDiff)
+      .map(p => `<tr>
+        <td><b>${p.clientes?.nombre||'—'}</b></td>
+        <td class="mono">${fmt(p.monto)}</td>
+        <td class="mono" style="color:var(--red)">${fmt(p.saldo)}</td>
+        <td class="mono">${fmt(p.cuota_mensual)}</td>
+        <td><span class="badge badge-red">${Math.abs(p.diasDiff)} días</span></td>
+        <td class="mono">${fmtFecha(p.proxCuota)}</td>
+        <td><a href="tel:${p.clientes?.telefono||''}" style="color:var(--accent);font-size:12px">${p.clientes?.telefono||'—'}</a></td>
+      </tr>`).join('');
+  }
+
+  // Tabla este mes
+  const tbMes = document.getElementById('rep-tabla-mes');
+  if (!esteMes.length) {
+    tbMes.innerHTML = '<tr><td colspan="6"><div class="empty">Sin vencimientos este mes.</div></td></tr>';
+  } else {
+    tbMes.innerHTML = esteMes
+      .sort((a,b) => a.diasDiff - b.diasDiff)
+      .map(p => {
+        const urgencia = p.diasDiff <= 3 ? 'badge-red' : p.diasDiff <= 7 ? 'badge-yellow' : 'badge-blue';
+        return `<tr>
+          <td><b>${p.clientes?.nombre||'—'}</b></td>
+          <td class="mono">${fmt(p.saldo)}</td>
+          <td class="mono">${fmt(p.cuota_mensual)}</td>
+          <td class="mono">${fmtFecha(p.proxCuota)}</td>
+          <td><span class="badge ${urgencia}">${p.diasDiff === 0 ? 'Hoy' : p.diasDiff === 1 ? 'Mañana' : 'En '+p.diasDiff+' días'}</span></td>
+          <td><a href="tel:${p.clientes?.telefono||''}" style="color:var(--accent);font-size:12px">${p.clientes?.telefono||'—'}</a></td>
+        </tr>`;
+      }).join('');
+  }
+
+  // Tabla próximo mes
+  const tbProx = document.getElementById('rep-tabla-prox');
+  if (!proxMes.length) {
+    tbProx.innerHTML = '<tr><td colspan="5"><div class="empty">Sin vencimientos el próximo mes.</div></td></tr>';
+  } else {
+    tbProx.innerHTML = proxMes
+      .sort((a,b) => a.proxCuota - b.proxCuota)
+      .map(p => `<tr>
+        <td><b>${p.clientes?.nombre||'—'}</b></td>
+        <td class="mono">${fmt(p.saldo)}</td>
+        <td class="mono">${fmt(p.cuota_mensual)}</td>
+        <td class="mono">${fmtFecha(p.proxCuota)}</td>
+        <td><a href="tel:${p.clientes?.telefono||''}" style="color:var(--accent);font-size:12px">${p.clientes?.telefono||'—'}</a></td>
+      </tr>`).join('');
+  }
+
+  // Tabla todos los activos
+  const tbTodos = document.getElementById('rep-tabla-todos');
+  if (!enriched.length) {
+    tbTodos.innerHTML = '<tr><td colspan="7"><div class="empty">Sin préstamos activos.</div></td></tr>';
+  } else {
+    tbTodos.innerHTML = enriched
+      .sort((a,b) => a.diasDiff - b.diasDiff)
+      .map(p => {
+        const estadoBadge = p.diasDiff < 0 ? 'badge-red' : p.diasDiff <= 7 ? 'badge-yellow' : 'badge-blue';
+        const estadoLabel = p.diasDiff < 0 ? 'Vencido' : p.diasDiff === 0 ? 'Hoy' : 'En '+p.diasDiff+' días';
+        return `<tr>
+          <td><b>${p.clientes?.nombre||'—'}</b></td>
+          <td class="mono">${fmt(p.monto)}</td>
+          <td class="mono">${fmt(p.saldo)}</td>
+          <td class="mono">${fmt(p.cuota_mensual)}</td>
+          <td class="mono">${p.tasa_mensual}%</td>
+          <td class="mono">${fmtFecha(p.proxCuota)}</td>
+          <td><span class="badge ${estadoBadge}">${estadoLabel}</span></td>
+        </tr>`;
+      }).join('');
+  }
 }
 
 // ===================== INIT =====================
