@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PréstamoFácil</title>
+    <title>FinTrack - Denisse</title>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css" />
@@ -109,7 +109,7 @@
           <div class="card">
             <div class="card-title">Movimiento manual</div>
             <div class="form-group"><label class="form-label">Tipo</label>
-              <select id="mov-tipo"><option value="ingreso">Ingreso (entra dinero)</option><option value="gasto">Gasto operativo (sale dinero)</option></select>
+              <select id="mov-tipo"><option value="ingreso">Ingreso (entra dinero)</option><option value="gasto">Gasto operativo (sale dinero)</option><option value="retiro">Devolución de aporte (retiro)</option></select>
             </div>
             <div class="form-group" style="margin-top:10px"><label class="form-label">Descripción</label><input type="text" id="mov-desc" placeholder="Ej: Compra libreta"></div>
             <div class="form-group" style="margin-top:10px"><label class="form-label">Monto (₲)</label><input type="number" id="mov-monto"></div>
@@ -150,6 +150,7 @@
                 <option value="cobro">Cobros</option>
                 <option value="ingreso">Ingresos</option>
                 <option value="gasto">Gastos</option>
+                <option value="retiro">Retiros</option>
               </select>
             </div>
             <div style="display:flex;gap:8px">
@@ -458,18 +459,19 @@ async function getStats(){
     sb.from('prestamos').select('id,saldo_capital,estado,monto,tasa_mensual,plazo_meses,tipo,fecha_inicio'),
     sb.from('pagos').select('monto_pagado,fecha,numero_cuota,prestamo_id')
   ]);
-  let capitalInicial=0,ingresos=0,gastos=0,desembolsos=0;
+  let capitalInicial=0,ingresos=0,gastos=0,desembolsos=0,retiros=0;
   (movs||[]).forEach(m=>{
     const v=parseFloat(m.monto);
     if(m.tipo==='capital_inicial')capitalInicial=v;
     else if(m.tipo==='ingreso')ingresos+=v;
     else if(m.tipo==='gasto')gastos+=v;
     else if(m.tipo==='desembolso')desembolsos+=v;
+    else if(m.tipo==='retiro')retiros+=v;
   });
   const totalCobrado=(pagos||[]).reduce((s,p)=>s+parseFloat(p.monto_pagado||0),0);
   // Calcular intereses: diferencia entre lo cobrado y el capital descontado
   // Usamos proporción de la tabla de amortización por cada pago
-  const caja=capitalInicial+ingresos+totalCobrado-gastos-desembolsos;
+  const caja=capitalInicial+ingresos+totalCobrado-gastos-retiros-desembolsos;
   const activos=(pres||[]).filter(p=>p.estado!=='cancelado');
   const calle=activos.reduce((s,p)=>s+parseFloat(p.saldo_capital||0),0);
   const mora=(pres||[]).filter(p=>p.estado==='mora');
@@ -522,8 +524,8 @@ async function loadDashboard(){
     document.getElementById('bar-pct-k').textContent=(100-pc)+'%';
   }
   const{data:movs}=await sb.from('movimientos_caja').select('*').order('created_at',{ascending:false}).limit(8);
-  const lbls={capital_inicial:'Capital',desembolso:'Préstamo',cobro:'Cobro',ingreso:'Ingreso',gasto:'Gasto'};
-  const bdgs={capital_inicial:'b-blue',desembolso:'b-blue',cobro:'b-green',ingreso:'b-gray',gasto:'b-red'};
+  const lbls={capital_inicial:'Capital',desembolso:'Préstamo',cobro:'Cobro',ingreso:'Ingreso',gasto:'Gasto',retiro:'Retiro'};
+  const bdgs={capital_inicial:'b-blue',desembolso:'b-blue',cobro:'b-green',ingreso:'b-gray',gasto:'b-red',retiro:'b-yellow'};
   const tb=document.getElementById('d-movs');
   if(!(movs||[]).length){tb.innerHTML='<tr><td colspan="5"><div class="empty">Sin movimientos.</div></td></tr>';return;}
   tb.innerHTML=(movs||[]).map(m=>{
@@ -539,15 +541,15 @@ async function loadCaja(){
   document.getElementById('c-calle').textContent=fmt(calle);
   document.getElementById('c-cobrado').textContent=fmt(totalCobrado);
   const{data:movs}=await sb.from('movimientos_caja').select('*').order('fecha').order('created_at');
-  const lbls={capital_inicial:'Capital inicial',desembolso:'Préstamo otorgado',cobro:'Cobro recibido',ingreso:'Ingreso',gasto:'Gasto'};
-  const bdgs={capital_inicial:'b-blue',desembolso:'b-blue',cobro:'b-green',ingreso:'b-gray',gasto:'b-red'};
+  const lbls={capital_inicial:'Capital inicial',desembolso:'Préstamo otorgado',cobro:'Cobro recibido',ingreso:'Ingreso',gasto:'Gasto',retiro:'Dev. de aporte'};
+  const bdgs={capital_inicial:'b-blue',desembolso:'b-blue',cobro:'b-green',ingreso:'b-gray',gasto:'b-red',retiro:'b-yellow'};
   const tb=document.getElementById('c-tabla');
   if(!(movs||[]).length){tb.innerHTML='<tr><td colspan="7"><div class="empty">Sin movimientos.</div></td></tr>';return;}
   let saldo=0;
   tb.innerHTML=(movs||[]).map(m=>{
     const ent=['capital_inicial','cobro','ingreso'].includes(m.tipo);
     saldo+=ent?parseFloat(m.monto):-parseFloat(m.monto);
-    const editable=m.tipo==='ingreso'||m.tipo==='gasto';
+    const editable=['ingreso','gasto','retiro'].includes(m.tipo);
     return`<tr>
       <td class="mono">${m.fecha}</td>
       <td><span class="badge ${bdgs[m.tipo]||'b-gray'}">${lbls[m.tipo]||m.tipo}</span></td>
@@ -592,7 +594,7 @@ async function editarMovimiento(id){
   openModal('Editar movimiento',`
     <div class="fg">
       <div class="form-group"><label class="form-label">Tipo</label>
-        <select id="em-tipo"><option value="ingreso" ${data.tipo==='ingreso'?'selected':''}>Ingreso</option><option value="gasto" ${data.tipo==='gasto'?'selected':''}>Gasto</option></select>
+        <select id="em-tipo"><option value="ingreso" ${data.tipo==='ingreso'?'selected':''}>Ingreso</option><option value="gasto" ${data.tipo==='gasto'?'selected':''}>Gasto operativo</option><option value="retiro" ${data.tipo==='retiro'?'selected':''}>Devolución de aporte</option></select>
       </div>
       <div class="form-group"><label class="form-label">Monto (₲)</label><input id="em-monto" type="number" value="${data.monto}"></div>
       <div class="form-group" style="grid-column:span 2"><label class="form-label">Descripción</label><input id="em-desc" value="${data.descripcion}"></div>
@@ -639,8 +641,8 @@ function filtrarMovimientos(){
   });
 
   // Calcular totales del filtro
-  const lbls={capital_inicial:'Capital inicial',desembolso:'Préstamo otorgado',cobro:'Cobro recibido',ingreso:'Ingreso',gasto:'Gasto'};
-  const bdgs={capital_inicial:'b-blue',desembolso:'b-blue',cobro:'b-green',ingreso:'b-gray',gasto:'b-red'};
+  const lbls={capital_inicial:'Capital inicial',desembolso:'Préstamo otorgado',cobro:'Cobro recibido',ingreso:'Ingreso',gasto:'Gasto',retiro:'Dev. de aporte'};
+  const bdgs={capital_inicial:'b-blue',desembolso:'b-blue',cobro:'b-green',ingreso:'b-gray',gasto:'b-red',retiro:'b-yellow'};
   let entradas=0,salidas=0;
   filtrados.forEach(m=>{
     if(['capital_inicial','cobro','ingreso'].includes(m.tipo))entradas+=parseFloat(m.monto);
@@ -665,7 +667,7 @@ function filtrarMovimientos(){
   tb.innerHTML=filtrados.map(m=>{
     const ent=['capital_inicial','cobro','ingreso'].includes(m.tipo);
     saldo+=ent?parseFloat(m.monto):-parseFloat(m.monto);
-    const editable=m.tipo==='ingreso'||m.tipo==='gasto';
+    const editable=['ingreso','gasto','retiro'].includes(m.tipo);
     return`<tr>
       <td class="mono">${m.fecha}</td>
       <td><span class="badge ${bdgs[m.tipo]||'b-gray'}">${lbls[m.tipo]||m.tipo}</span></td>
