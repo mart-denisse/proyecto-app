@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FinTrack - Denisse</title>
+    <title>PréstamoFácil</title>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css" />
@@ -74,8 +74,8 @@
         <div class="g4">
           <div class="metric"><div class="metric-label">🏁 Capital inicial</div><div class="metric-value" id="d-capital">—</div></div>
           <div class="metric m-red"><div class="metric-label">💸 Gastos operativos</div><div class="metric-value" id="d-gastos">—</div></div>
-          <div class="metric m-yellow"><div class="metric-label">📅 Intereses este mes</div><div class="metric-value" id="d-intereses-mes">—</div><div class="metric-sub">solo intereses, sin capital</div></div>
-          <div class="metric m-green"><div class="metric-label">📈 Total cobrado</div><div class="metric-value" id="d-cobrado">—</div><div class="metric-sub">todos los pagos</div></div>
+          <div class="metric m-yellow"><div class="metric-label">📅 Intereses a cobrar este mes</div><div class="metric-value" id="d-intereses-mes">—</div><div class="metric-sub">solo intereses, sin capital</div></div>
+          <div class="metric m-green"><div class="metric-label">📈 Resultado del mes</div><div class="metric-value" id="d-resultado-mes">—</div><div class="metric-sub">intereses − gastos operativos</div></div>
         </div>
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -120,13 +120,13 @@
         <div class="g3">
           <div class="metric m-blue"><div class="metric-label">En caja ahora</div><div class="metric-value" id="c-caja">—</div></div>
           <div class="metric m-green"><div class="metric-label">En calle</div><div class="metric-value" id="c-calle">—</div></div>
-          <div class="metric"><div class="metric-label">Total cobrado</div><div class="metric-value" id="c-cobrado" style="color:var(--green)">—</div></div>
+          <div class="metric"><div class="metric-label">Total cobrado intereses</div><div class="metric-value" id="c-cobrado" style="color:var(--green)">—</div></div>
         </div>
         <div class="card">
           <div class="card-title">Historial completo</div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Entrada</th><th>Salida</th><th>Saldo</th><th></th></tr></thead>
-            <tbody id="c-tabla"><tr><td colspan="7"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Monto</th><th>Saldo</th><th></th></tr></thead>
+            <tbody id="c-tabla"><tr><td colspan="6"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
           </table></div>
         </div>
       </div>
@@ -209,14 +209,33 @@
             <div class="form-group"><label class="form-label">Tasa mensual (%)</label><input type="number" id="pre-tasa" placeholder="Ej: 5" step="0.1"></div>
             <div class="form-group"><label class="form-label">Plazo (meses)</label><input type="number" id="pre-plazo" placeholder="Ej: 12"></div>
             <div class="form-group"><label class="form-label">Tipo de cuota</label>
-              <select id="pre-tipo"><option value="frances">Francés (cuota fija)</option><option value="simple">Interés simple</option></select>
+              <select id="pre-tipo" onchange="onTipoCuotaChange()"><option value="frances">Francés (cuota fija)</option><option value="simple">Interés simple</option><option value="manual">Manual (cuotas personalizadas)</option></select>
             </div>
             <div class="form-group"><label class="form-label">Fecha inicio</label><input type="date" id="pre-fecha"></div>
+          </div>
+          <!-- Campos solo para tipo manual -->
+          <div id="pre-manual-section" style="display:none;margin-top:8px">
+            <div style="background:var(--bg2);border-radius:8px;padding:14px;margin-bottom:10px">
+              <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text2)">📋 Cuotas personalizadas</div>
+              <div class="fg" style="margin-bottom:10px">
+                <div class="form-group"><label class="form-label">Cuota regular (₲)</label><input type="number" id="pre-cuota-regular" placeholder="Ej: 3000000" oninput="previewCuotasManual()"></div>
+                <div class="form-group"><label class="form-label">Última cuota (₲)</label><input type="number" id="pre-cuota-ultima" placeholder="Ej: 2000000 (vacío = igual)" oninput="previewCuotasManual()"></div>
+              </div>
+              <div id="pre-manual-preview" style="font-size:12px;color:var(--text3)"></div>
+            </div>
           </div>
           <div class="form-actions"><button class="btn btn-primary" onclick="crearPrestamo()">💸 Crear préstamo</button></div>
         </div>
         <div class="card">
-          <div class="card-title">Todos los préstamos</div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+            <div style="flex:1;min-width:180px"><input type="text" id="pre-search" placeholder="🔍 Buscar cliente..." oninput="filtrarPrestamos()" style="width:100%"></div>
+            <select id="pre-filter-estado" onchange="filtrarPrestamos()" style="width:150px">
+              <option value="">Todos los estados</option>
+              <option value="activo">Activos</option>
+              <option value="mora">En mora</option>
+              <option value="cancelado">Cancelados</option>
+            </select>
+          </div>
           <div class="table-wrap"><table>
             <thead><tr><th>Cliente</th><th>Monto</th><th>Tasa</th><th>Cuota</th><th>Saldo capital</th><th>Estado</th><th></th></tr></thead>
             <tbody id="pre-tabla"><tr><td colspan="7"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
@@ -230,11 +249,23 @@
           <div><div class="page-title">Pagos</div><div class="page-sub">Historial de cobros</div></div>
           <button class="btn btn-primary" onclick="abrirModalPago()">➕ Registrar pago</button>
         </div>
+        <div class="card" style="padding:14px 20px">
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <div style="flex:1;min-width:180px"><input type="text" id="pago-search" placeholder="🔍 Buscar cliente..." oninput="filtrarPagos()" style="width:100%"></div>
+            <select id="pago-filter-estado" onchange="filtrarPagos()" style="width:160px">
+              <option value="">Todos</option>
+              <option value="completo">Completos</option>
+              <option value="parcial">Parciales</option>
+            </select>
+            <input type="date" id="pago-filter-desde" onchange="filtrarPagos()" style="width:140px">
+            <input type="date" id="pago-filter-hasta" onchange="filtrarPagos()" style="width:140px">
+            <button class="btn btn-sm" onclick="limpiarFiltrosPagos()">✕ Limpiar</button>
+          </div>
+        </div>
         <div class="card">
-          <div class="card-title">Historial</div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Fecha</th><th>Cliente</th><th>Cuota #</th><th>Monto cuota</th><th>Pagado</th><th>Pendiente</th><th>Nota</th><th></th></tr></thead>
-            <tbody id="pago-tabla"><tr><td colspan="8"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
+            <thead><tr><th>Fecha</th><th>Cliente</th><th>Cuota #</th><th>Monto cuota</th><th>Pagado</th><th>Descuento</th><th>Pendiente</th><th>Nota</th><th></th></tr></thead>
+            <tbody id="pago-tabla"><tr><td colspan="9"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
           </table></div>
         </div>
       </div>
@@ -440,12 +471,33 @@ function cuotaFrancesa(monto,tasa,plazo){
   const r=tasa/100; if(r===0)return monto/plazo;
   return monto*r*Math.pow(1+r,plazo)/(Math.pow(1+r,plazo)-1);
 }
-function tablaAmort(monto,tasa,plazo,tipo){
+function tablaAmort(monto,tasa,plazo,tipo,cuotaRegular,cuotaUltima){
   const rows=[]; let saldo=monto;
+  if(tipo==='manual'){
+    // Calcular interés implícito total = suma de cuotas − monto prestado
+    const cReg=cuotaRegular||monto/plazo;
+    const cUlt=cuotaUltima||cReg;
+    const totalCobrar=cReg*(plazo-1)+cUlt;
+    const interesTotal=Math.max(0,totalCobrar-monto);
+    // Distribuir interés proporcional al peso de cada cuota
+    for(let i=1;i<=plazo;i++){
+      const esUltima=i===plazo;
+      const cuota=Math.round(esUltima?cUlt:cReg);
+      const pesoInteres=cuota/totalCobrar;
+      const interes=Math.round(interesTotal*pesoInteres);
+      const capital=cuota-interes;
+      saldo=Math.max(0,saldo-capital);
+      rows.push({num:i,capital,interes,cuota,saldo});
+    }
+    return rows;
+  }
   for(let i=1;i<=plazo;i++){
     let interes,capital,cuota;
-    if(tipo==='frances'){cuota=cuotaFrancesa(monto,tasa,plazo);interes=saldo*tasa/100;capital=cuota-interes;}
-    else{interes=monto*tasa/100;capital=monto/plazo;cuota=capital+interes;}
+    if(tipo==='frances'){
+      cuota=cuotaFrancesa(monto,tasa,plazo);interes=saldo*tasa/100;capital=cuota-interes;
+    } else {
+      interes=monto*tasa/100;capital=monto/plazo;cuota=capital+interes;
+    }
     saldo=Math.max(0,saldo-capital);
     rows.push({num:i,capital,interes,cuota:Math.round(cuota),saldo});
   }
@@ -455,7 +507,7 @@ function tablaAmort(monto,tasa,plazo,tipo){
 // ===== STATS (fuente única de verdad) =====
 async function getStats(){
   const [{data:movs},{data:pres},{data:pagos}]=await Promise.all([
-    sb.from('movimientos_caja').select('tipo,monto').order('fecha'),
+    sb.from('movimientos_caja').select('tipo,monto,fecha').order('fecha'),
     sb.from('prestamos').select('id,saldo_capital,estado,monto,tasa_mensual,plazo_meses,tipo,fecha_inicio'),
     sb.from('pagos').select('monto_pagado,fecha,numero_cuota,prestamo_id')
   ]);
@@ -491,7 +543,7 @@ async function getStats(){
   finMes.setHours(23,59,59,999);
   let interesesMes=0;
   for(const pre of (pres||[])){
-    const tabla=tablaAmort(pre.monto,pre.tasa_mensual,pre.plazo_meses,pre.tipo);
+    const tabla=tablaAmort(pre.monto,pre.tasa_mensual,pre.plazo_meses,pre.tipo,pre.cuota_mensual,pre.cuota_ultima);
     for(const c of tabla){
       const fechaCuota=new Date(pre.fecha_inicio);
       fechaCuota.setMonth(fechaCuota.getMonth()+c.num);
@@ -501,16 +553,25 @@ async function getStats(){
     }
   }
 
-  return{caja,calle,patrimonio:caja+calle,totalCobrado,capitalInicial,gastos,mora,activos,interesesTotal,interesesMes};
+  // Gastos operativos solo del mes actual (fecha en formato YYYY-MM-DD)
+  const prefijoMes=`${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}`;
+  const gastosMes=(movs||[])
+    .filter(m=>m.tipo==='gasto'&&String(m.fecha||'').startsWith(prefijoMes))
+    .reduce((s,m)=>s+parseFloat(m.monto||0),0);
+
+  const resultadoMes=interesesMes-gastosMes;
+  return{caja,calle,patrimonio:caja+calle,totalCobrado,capitalInicial,gastos,mora,activos,interesesTotal,interesesMes,resultadoMes};
 }
 
 // ===== DASHBOARD =====
 async function loadDashboard(){
-  const{caja,calle,patrimonio,totalCobrado,capitalInicial,gastos,activos,interesesTotal,interesesMes}=await getStats();
+  const{caja,calle,patrimonio,totalCobrado,capitalInicial,gastos,activos,interesesTotal,interesesMes,resultadoMes}=await getStats();
   document.getElementById('d-caja').textContent=fmt(caja);
   document.getElementById('d-calle').textContent=fmt(calle);
   document.getElementById('d-patrim').textContent=fmt(patrimonio);
-  document.getElementById('d-cobrado').textContent=fmt(totalCobrado);
+  const elRes=document.getElementById('d-resultado-mes');
+  elRes.textContent=fmt(Math.abs(resultadoMes));
+  elRes.style.color=resultadoMes>=0?'var(--green)':'var(--red)';
   document.getElementById('d-capital').textContent=fmt(capitalInicial);
   document.getElementById('d-gastos').textContent=fmt(gastos);
   document.getElementById('d-intereses-total').textContent=fmt(interesesTotal);
@@ -536,27 +597,37 @@ async function loadDashboard(){
 
 // ===== CAJA =====
 async function loadCaja(){
-  const{caja,calle,totalCobrado}=await getStats();
+  const{caja,calle,interesesTotal}=await getStats();
   document.getElementById('c-caja').textContent=fmt(caja);
   document.getElementById('c-calle').textContent=fmt(calle);
-  document.getElementById('c-cobrado').textContent=fmt(totalCobrado);
-  const{data:movs}=await sb.from('movimientos_caja').select('*').order('fecha').order('created_at');
+  document.getElementById('c-cobrado').textContent=fmt(interesesTotal);
+  // Cargar todos los movimientos para calcular el saldo acumulado desde inicio (asc)
+  const{data:movsAsc}=await sb.from('movimientos_caja').select('*').order('fecha',{ascending:true}).order('created_at',{ascending:true});
+  // Calcular saldo acumulado por ID
+  const saldoMap={};
+  let saldoCorrido=0;
+  (movsAsc||[]).forEach(m=>{
+    const ent=['capital_inicial','cobro','ingreso'].includes(m.tipo);
+    saldoCorrido+=ent?parseFloat(m.monto):-parseFloat(m.monto);
+    saldoMap[m.id]=saldoCorrido;
+  });
+  // Mostrar en orden descendente (más reciente primero)
+  const movs=(movsAsc||[]).slice().reverse();
   const lbls={capital_inicial:'Capital inicial',desembolso:'Préstamo otorgado',cobro:'Cobro recibido',ingreso:'Ingreso',gasto:'Gasto',retiro:'Dev. de aporte'};
   const bdgs={capital_inicial:'b-blue',desembolso:'b-blue',cobro:'b-green',ingreso:'b-gray',gasto:'b-red',retiro:'b-yellow'};
   const tb=document.getElementById('c-tabla');
-  if(!(movs||[]).length){tb.innerHTML='<tr><td colspan="7"><div class="empty">Sin movimientos.</div></td></tr>';return;}
-  let saldo=0;
-  tb.innerHTML=(movs||[]).map(m=>{
+  if(!movs.length){tb.innerHTML='<tr><td colspan="6"><div class="empty">Sin movimientos.</div></td></tr>';return;}
+  tb.innerHTML=movs.map(m=>{
     const ent=['capital_inicial','cobro','ingreso'].includes(m.tipo);
-    saldo+=ent?parseFloat(m.monto):-parseFloat(m.monto);
     const editable=['ingreso','gasto','retiro'].includes(m.tipo);
+    const color=ent?'var(--green)':'var(--red)';
+    const signo=ent?'+':'-';
     return`<tr>
       <td class="mono">${m.fecha}</td>
       <td><span class="badge ${bdgs[m.tipo]||'b-gray'}">${lbls[m.tipo]||m.tipo}</span></td>
       <td>${m.descripcion}</td>
-      <td style="color:var(--green)" class="mono">${ent?fmt(m.monto):'—'}</td>
-      <td style="color:var(--red)" class="mono">${!ent?fmt(m.monto):'—'}</td>
-      <td class="mono"><b>${fmt(saldo)}</b></td>
+      <td class="mono" style="color:${color}">${signo}${fmt(m.monto)}</td>
+      <td class="mono"><b>${fmt(saldoMap[m.id]||0)}</b></td>
       <td><div class="actions-cell">
         ${editable?`<button class="btn btn-icon btn-sm" onclick="editarMovimiento('${m.id}')">✏️</button>`:''}
         ${editable?`<button class="btn-danger btn btn-icon btn-sm" onclick="eliminarMovimiento('${m.id}')">🗑</button>`:''}
@@ -711,7 +782,7 @@ async function agregarCliente(){
   const ci=document.getElementById('cli-ci').value.trim();
   const telefono=document.getElementById('cli-tel').value.trim();
   const direccion=document.getElementById('cli-dir').value.trim();
-  if(!nombre||!ci){toast('Nombre y CI son obligatorios.','err');return;}
+  if(!nombre){toast('El nombre es obligatorio.','err');return;}
   const{error}=await sb.from('clientes').insert({nombre,ci,telefono,direccion});
   if(error){toast(error.message.includes('unique')?'CI ya registrado.':error.message,'err');return;}
   ['cli-nombre','cli-ci','cli-tel','cli-dir'].forEach(id=>document.getElementById(id).value='');
@@ -750,16 +821,23 @@ async function refreshSelectClientes(){
   sel.value=cur;
 }
 
+let _todosPrestamos=[];
 async function loadPrestamos(){
   await refreshSelectClientes();
   const{data}=await sb.from('prestamos').select('*,clientes(nombre)').order('created_at',{ascending:false});
+  _todosPrestamos=data||[];
+  renderPrestamos(_todosPrestamos);
+}
+
+function renderPrestamos(data){
   const tb=document.getElementById('pre-tabla');
   if(!data?.length){tb.innerHTML='<tr><td colspan="7"><div class="empty">Sin préstamos.</div></td></tr>';return;}
   const bdgs={activo:'b-blue',mora:'b-yellow',cancelado:'b-green'};
   const lbls={activo:'Activo',mora:'En mora',cancelado:'Cancelado'};
   tb.innerHTML=data.map(p=>`<tr>
     <td>${p.clientes?.nombre||'—'}</td>
-    <td class="mono">${fmt(p.monto)}</td><td class="mono">${p.tasa_mensual}%</td>
+    <td class="mono">${fmt(p.monto)}</td>
+    <td class="mono">${p.tipo==='manual'?'—':p.tasa_mensual+'%'}</td>
     <td class="mono">${fmt(p.cuota_mensual)}</td><td class="mono">${fmt(p.saldo_capital)}</td>
     <td><span class="badge ${bdgs[p.estado]}">${lbls[p.estado]}</span></td>
     <td><div class="actions-cell">
@@ -769,17 +847,62 @@ async function loadPrestamos(){
   </tr>`).join('');
 }
 
+function filtrarPrestamos(){
+  const busq=(document.getElementById('pre-search')?.value||'').toLowerCase().trim();
+  const estado=document.getElementById('pre-filter-estado')?.value||'';
+  let filtrados=_todosPrestamos;
+  if(busq)filtrados=filtrados.filter(p=>(p.clientes?.nombre||'').toLowerCase().includes(busq));
+  if(estado)filtrados=filtrados.filter(p=>p.estado===estado);
+  renderPrestamos(filtrados);
+}
+
+function onTipoCuotaChange(){
+  const tipo=document.getElementById('pre-tipo').value;
+  const sec=document.getElementById('pre-manual-section');
+  const tasaWrap=document.getElementById('pre-tasa').closest('.form-group');
+  sec.style.display=tipo==='manual'?'block':'none';
+  tasaWrap.style.display=tipo==='manual'?'none':'';
+}
+
+function previewCuotasManual(){
+  const plazo=parseInt(document.getElementById('pre-plazo').value)||0;
+  const regular=parseFloat(document.getElementById('pre-cuota-regular').value)||0;
+  const ultima=parseFloat(document.getElementById('pre-cuota-ultima').value)||regular;
+  const el=document.getElementById('pre-manual-preview');
+  if(!plazo||!regular){el.textContent='';return;}
+  const total=regular*(plazo-1)+ultima;
+  el.innerHTML=`${plazo-1} cuotas de <b>${fmt(regular)}</b> + última de <b>${fmt(ultima)}</b> = Total: <b>${fmt(total)}</b>`;
+}
+
 async function crearPrestamo(){
   const cliente_id=document.getElementById('pre-cli').value;
   const monto=parseFloat(document.getElementById('pre-monto').value);
-  const tasa_mensual=parseFloat(document.getElementById('pre-tasa').value);
   const plazo_meses=parseInt(document.getElementById('pre-plazo').value);
   const tipo=document.getElementById('pre-tipo').value;
   const fecha_inicio=document.getElementById('pre-fecha').value;
-  if(!cliente_id||isNaN(monto)||isNaN(tasa_mensual)||isNaN(plazo_meses)||!fecha_inicio){toast('Complete todos los campos.','err');return;}
-  const cuota_mensual=Math.round(tipo==='frances'?cuotaFrancesa(monto,tasa_mensual,plazo_meses):(monto/plazo_meses)+(monto*tasa_mensual/100));
+  if(!cliente_id||isNaN(monto)||isNaN(plazo_meses)||!fecha_inicio){toast('Complete todos los campos.','err');return;}
+
+  let tasa_mensual=0, cuota_mensual=0;
+  if(tipo==='manual'){
+    const cuotaReg=parseFloat(document.getElementById('pre-cuota-regular').value)||0;
+    if(!cuotaReg){toast('Ingresá el monto de la cuota regular.','err');return;}
+    cuota_mensual=Math.round(cuotaReg);
+    tasa_mensual=0;
+  } else {
+    tasa_mensual=parseFloat(document.getElementById('pre-tasa').value);
+    if(isNaN(tasa_mensual)){toast('Ingresá la tasa mensual.','err');return;}
+    cuota_mensual=Math.round(tipo==='frances'?cuotaFrancesa(monto,tasa_mensual,plazo_meses):(monto/plazo_meses)+(monto*tasa_mensual/100));
+  }
   const{data:pre,error}=await sb.from('prestamos').insert({cliente_id,monto,tasa_mensual,plazo_meses,tipo,cuota_mensual,saldo_capital:monto,estado:'activo',fecha_inicio}).select().single();
   if(error){toast('Error: '+error.message,'err');return;}
+  // Guardar cuota última si es manual
+  if(tipo==='manual'){
+    const ultimaRaw=parseFloat(document.getElementById('pre-cuota-ultima').value);
+    const cuota_ultima=isNaN(ultimaRaw)?cuota_mensual:Math.round(ultimaRaw);
+    if(cuota_ultima!==cuota_mensual){
+      await sb.from('prestamos').update({cuota_ultima}).eq('id',pre.id);
+    }
+  }
   await sb.from('movimientos_caja').insert({fecha:fecha_inicio,tipo:'desembolso',descripcion:'Préstamo otorgado',monto,prestamo_id:pre.id});
   ['pre-monto','pre-tasa','pre-plazo'].forEach(id=>document.getElementById(id).value='');
   toast('Préstamo creado ✓','ok'); refreshAll();
@@ -787,10 +910,23 @@ async function crearPrestamo(){
 
 async function editarPrestamo(id){
   const{data:p}=await sb.from('prestamos').select('*,clientes(nombre)').eq('id',id).single();
+  const esManual=p.tipo==='manual';
+  const cuotaUltimaVal=p.cuota_ultima!=null?p.cuota_ultima:p.cuota_mensual;
   openModal('Editar préstamo — '+p.clientes?.nombre,`
     <div class="fg">
       <div class="form-group"><label class="form-label">Monto original (₲)</label><input id="ep-m" type="number" value="${p.monto}"></div>
-      <div class="form-group"><label class="form-label">Tasa mensual (%)</label><input id="ep-t" type="number" step="0.1" value="${p.tasa_mensual}"></div>
+      <div class="form-group"><label class="form-label">Tipo</label>
+        <select id="ep-tipo" onchange="(function(){const t=document.getElementById('ep-tipo').value;document.getElementById('ep-tasa-row').style.display=t==='manual'?'none':'';document.getElementById('ep-manual-row').style.display=t==='manual'?'':'none';})()">
+          <option value="frances" ${p.tipo==='frances'?'selected':''}>Francés (cuota fija)</option>
+          <option value="simple" ${p.tipo==='simple'?'selected':''}>Interés simple</option>
+          <option value="manual" ${p.tipo==='manual'?'selected':''}>Manual (cuotas personalizadas)</option>
+        </select>
+      </div>
+      <div id="ep-tasa-row" class="form-group" style="display:${esManual?'none':''}"><label class="form-label">Tasa mensual (%)</label><input id="ep-t" type="number" step="0.1" value="${p.tasa_mensual||0}"></div>
+      <div id="ep-manual-row" style="display:${esManual?'':'none'}">
+        <div class="form-group"><label class="form-label">Cuota regular (₲)</label><input id="ep-creg" type="number" value="${p.cuota_mensual||0}"></div>
+        <div class="form-group"><label class="form-label">Cuota última (₲) — dejar vacío si igual a regular</label><input id="ep-cult" type="number" value="${cuotaUltimaVal!==p.cuota_mensual?cuotaUltimaVal:''}"></div>
+      </div>
       <div class="form-group"><label class="form-label">Plazo (meses)</label><input id="ep-p" type="number" value="${p.plazo_meses}"></div>
       <div class="form-group"><label class="form-label">Saldo capital actual (₲)</label><input id="ep-s" type="number" value="${p.saldo_capital}"></div>
       <div class="form-group"><label class="form-label">Estado</label>
@@ -801,10 +937,22 @@ async function editarPrestamo(id){
     <div class="form-actions"><button class="btn btn-primary" onclick="window._modalSave()">💾 Guardar</button><button class="btn" onclick="closeModal()">Cancelar</button></div>
   `,async()=>{
     const monto=parseFloat(document.getElementById('ep-m').value);
-    const tasa=parseFloat(document.getElementById('ep-t').value);
     const plazo=parseInt(document.getElementById('ep-p').value);
-    const cuota=Math.round(p.tipo==='frances'?cuotaFrancesa(monto,tasa,plazo):(monto/plazo)+(monto*tasa/100));
-    const{error}=await sb.from('prestamos').update({monto,tasa_mensual:tasa,plazo_meses:plazo,cuota_mensual:cuota,saldo_capital:parseFloat(document.getElementById('ep-s').value),estado:document.getElementById('ep-e').value,fecha_inicio:document.getElementById('ep-f').value}).eq('id',id);
+    const tipo=document.getElementById('ep-tipo').value;
+    let cuota_mensual,tasa_mensual,cuota_ultima=null;
+    if(tipo==='manual'){
+      cuota_mensual=Math.round(parseFloat(document.getElementById('ep-creg').value)||0);
+      if(!cuota_mensual){toast('Ingresá la cuota regular.','err');return;}
+      tasa_mensual=0;
+      const cultRaw=parseFloat(document.getElementById('ep-cult').value);
+      cuota_ultima=isNaN(cultRaw)?cuota_mensual:Math.round(cultRaw);
+    } else {
+      tasa_mensual=parseFloat(document.getElementById('ep-t').value)||0;
+      cuota_mensual=Math.round(tipo==='frances'?cuotaFrancesa(monto,tasa_mensual,plazo):(monto/plazo)+(monto*tasa_mensual/100));
+      cuota_ultima=cuota_mensual;
+    }
+    const upd={monto,tasa_mensual,plazo_meses:plazo,cuota_mensual,cuota_ultima,tipo,saldo_capital:parseFloat(document.getElementById('ep-s').value),estado:document.getElementById('ep-e').value,fecha_inicio:document.getElementById('ep-f').value};
+    const{error}=await sb.from('prestamos').update(upd).eq('id',id);
     if(error){toast('Error: '+error.message,'err');return;}
     toast('Préstamo actualizado ✓','ok'); closeModal(); refreshAll();
   });
@@ -819,16 +967,23 @@ async function eliminarPrestamo(id){
 }
 
 // ===== PAGOS =====
+let _todosPagos=[];
 async function loadPagos(){
   const{data}=await sb.from('pagos').select('*,prestamos(cuota_mensual,clientes(nombre))').order('fecha',{ascending:false}).order('created_at',{ascending:false});
+  _todosPagos=data||[];
+  renderPagos(_todosPagos);
+}
+
+function renderPagos(data){
   const tb=document.getElementById('pago-tabla');
-  if(!data?.length){tb.innerHTML='<tr><td colspan="8"><div class="empty">Sin pagos.</div></td></tr>';return;}
+  if(!data?.length){tb.innerHTML='<tr><td colspan="9"><div class="empty">Sin pagos.</div></td></tr>';return;}
   tb.innerHTML=data.map(p=>`<tr>
     <td class="mono">${p.fecha}</td>
     <td>${p.prestamos?.clientes?.nombre||'—'}</td>
     <td class="mono">${p.numero_cuota}</td>
     <td class="mono">${fmt(p.monto_cuota)}</td>
     <td class="mono" style="color:var(--green)">${fmt(p.monto_pagado)}</td>
+    <td class="mono">${p.descuento&&p.descuento>0?`<span style="color:var(--yellow)">-${fmt(p.descuento)}</span>`:'—'}</td>
     <td class="mono">${p.es_parcial?`<span class="badge b-yellow">Falta ${fmt(p.saldo_pendiente)}</span>`:'<span class="badge b-green">✓ Completo</span>'}</td>
     <td>${p.nota||'—'}</td>
     <td><div class="actions-cell">
@@ -838,11 +993,31 @@ async function loadPagos(){
   </tr>`).join('');
 }
 
+function filtrarPagos(){
+  const busq=(document.getElementById('pago-search')?.value||'').toLowerCase().trim();
+  const estado=document.getElementById('pago-filter-estado')?.value||'';
+  const desde=document.getElementById('pago-filter-desde')?.value||'';
+  const hasta=document.getElementById('pago-filter-hasta')?.value||'';
+  let filtrados=_todosPagos;
+  if(busq)filtrados=filtrados.filter(p=>(p.prestamos?.clientes?.nombre||'').toLowerCase().includes(busq));
+  if(estado==='completo')filtrados=filtrados.filter(p=>!p.es_parcial);
+  if(estado==='parcial')filtrados=filtrados.filter(p=>p.es_parcial);
+  if(desde)filtrados=filtrados.filter(p=>p.fecha>=desde);
+  if(hasta)filtrados=filtrados.filter(p=>p.fecha<=hasta);
+  renderPagos(filtrados);
+}
+
+function limpiarFiltrosPagos(){
+  ['pago-search','pago-filter-desde','pago-filter-hasta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('pago-filter-estado').value='';
+  filtrarPagos();
+}
+
 // ===== MODAL PAGO =====
 let _pState={prestamo:null,cuotasEstado:[]};
 
 async function abrirModalPago(){
-  const{data:pres}=await sb.from('prestamos').select('*,clientes(nombre)').neq('estado','cancelado').order('created_at',{ascending:false});
+  const{data:pres}=await sb.from('prestamos').select('*,cuota_ultima,clientes(nombre)').neq('estado','cancelado').order('created_at',{ascending:false});
   const opts=(pres||[]).map(p=>`<option value="${p.id}">${p.clientes?.nombre} — Saldo: ${fmt(p.saldo_capital)}</option>`).join('');
   document.getElementById('pago-modal-body').innerHTML=`
     <div class="form-group" style="margin-bottom:16px">
@@ -863,7 +1038,7 @@ async function onSelectPrestamo(){
 
   // Cargar todos los pagos de este préstamo
   const{data:pagosExist}=await sb.from('pagos').select('*').eq('prestamo_id',id).order('numero_cuota').order('created_at');
-  const tabla=tablaAmort(pre.monto,pre.tasa_mensual,pre.plazo_meses,pre.tipo);
+  const tabla=tablaAmort(pre.monto,pre.tasa_mensual,pre.plazo_meses,pre.tipo,pre.cuota_mensual,pre.cuota_ultima);
 
   // Calcular cuánto se pagó por cuota
   const pagadoPorCuota={};
@@ -916,10 +1091,14 @@ function renderFormPago(){
         <label class="form-label">Fecha de pago</label>
         <input type="date" id="pm-fecha" value="${today()}">
       </div>
-    </div>
-    <div class="form-group" style="margin-bottom:12px">
-      <label class="form-label">Nota (opcional)</label>
-      <input type="text" id="pm-nota" placeholder="Ej: Efectivo, transferencia...">
+      <div class="form-group">
+        <label class="form-label">Descuento / bonificación (₲)</label>
+        <input type="number" id="pm-descuento" placeholder="0 si no aplica" value="0" oninput="renderResumenPago()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nota (opcional)</label>
+        <input type="text" id="pm-nota" placeholder="Ej: Efectivo, acuerdo especial...">
+      </div>
     </div>
     <div id="pm-resumen"></div>
     <div class="form-actions" style="margin-top:16px">
@@ -972,6 +1151,7 @@ function renderResumenPago(){
   const totalAplica=aplicaciones.reduce((s,a)=>s+a.aplica,0);
   const sobra=Math.max(0,monto-totalAplica);
 
+  const descuento=parseFloat(document.getElementById('pm-descuento')?.value)||0;
   el.innerHTML=`<div class="resumen">
     ${aplicaciones.map(a=>`
       <div class="resumen-row">
@@ -980,14 +1160,16 @@ function renderResumenPago(){
       </div>
       ${!a.completa?`<div class="resumen-row" style="color:var(--yellow);font-size:12px"><span>Saldo pendiente cuota #${a.cuota.num}</span><span class="mono">${fmt(a.nuevo_pendiente)}</span></div>`:''}
     `).join('')}
+    ${descuento>0?`<div class="resumen-row" style="color:var(--yellow);font-size:12px"><span>💛 Descuento / bonificación</span><span class="mono">-${fmt(descuento)}</span></div>`:''}
     ${sobra>0?`<div class="resumen-row" style="color:var(--red);font-size:12px"><span>⚠️ Excede las cuotas seleccionadas</span><span class="mono">+${fmt(sobra)}</span></div>`:''}
-    <div class="resumen-row total"><span>Total a registrar</span><span class="mono">${fmt(totalAplica)}</span></div>
+    <div class="resumen-row total"><span>Total que entra a caja</span><span class="mono">${fmt(Math.max(0,totalAplica-descuento))}</span></div>
   </div>`;
 }
 
 async function confirmarPago(){
   const pre=_pState.prestamo;
   const monto=parseFloat(document.getElementById('pm-monto')?.value)||0;
+  const descuento=parseFloat(document.getElementById('pm-descuento')?.value)||0;
   const fecha=document.getElementById('pm-fecha').value;
   const nota=document.getElementById('pm-nota').value.trim();
   const pendientes=_pState.cuotasEstado.filter(c=>c.estado!=='pagada');
@@ -1017,6 +1199,7 @@ async function confirmarPago(){
       es_parcial,
       saldo_pendiente:nuevo_saldo,
       fecha,
+      descuento:descuento>0?descuento:null,
       nota:nota||null
     });
     montoRestante-=aplica;
@@ -1031,7 +1214,7 @@ async function confirmarPago(){
   // Actualizar saldo_capital del préstamo
   // El saldo_capital baja solo con pagos de capital puro — pero como el usuario no divide,
   // descontamos del saldo proporcionalmente según la tabla de amortización
-  const tabla=tablaAmort(pre.monto,pre.tasa_mensual,pre.plazo_meses,pre.tipo);
+  const tabla=tablaAmort(pre.monto,pre.tasa_mensual,pre.plazo_meses,pre.tipo,pre.cuota_mensual,pre.cuota_ultima);
   let capitalDescontado=0;
   for(const ins of inserts){
     const cuotaAmort=tabla.find(c=>c.num===ins.numero_cuota);
@@ -1043,12 +1226,14 @@ async function confirmarPago(){
   const nuevoEstado=nuevoSaldo<1?'cancelado':'activo';
   await sb.from('prestamos').update({saldo_capital:Math.round(nuevoSaldo),estado:nuevoEstado}).eq('id',pre.id);
 
-  // Registrar en movimientos de caja (un movimiento por el total cobrado)
+  // Registrar en movimientos de caja (monto recibido real = cobrado − descuento)
   const totalCobrado=inserts.reduce((s,i)=>s+i.monto_pagado,0);
+  const montoEnCaja=Math.max(0,totalCobrado-descuento);
   const nomCliente=pre.clientes?.nombre||'cliente';
-  await sb.from('movimientos_caja').insert({fecha,tipo:'cobro',descripcion:`Cobro — ${nomCliente}`,monto:totalCobrado,prestamo_id:pre.id});
+  const descDesc=descuento>0?` (desc. ${fmt(descuento)})`:'';
+  await sb.from('movimientos_caja').insert({fecha,tipo:'cobro',descripcion:`Cobro — ${nomCliente}${descDesc}`,monto:montoEnCaja,prestamo_id:pre.id});
 
-  toast(`Pago de ${fmt(totalCobrado)} registrado ✓`,'ok');
+  toast(`Pago de ${fmt(montoEnCaja)} registrado ✓`,'ok');
   closePagoModal(); refreshAll();
 }
 
@@ -1076,7 +1261,7 @@ async function editarPago(id){
     // Ajustar saldo del préstamo y movimiento de caja
     const{data:pre}=await sb.from('prestamos').select('saldo_capital,monto,tasa_mensual,plazo_meses,tipo').eq('id',p.prestamo_id).single();
     if(pre&&diffMonto!==0){
-      const tablaP=tablaAmort(pre.monto,pre.tasa_mensual,pre.plazo_meses,pre.tipo);
+      const tablaP=tablaAmort(pre.monto,pre.tasa_mensual,pre.plazo_meses,pre.tipo,pre.cuota_mensual,pre.cuota_ultima);
       const cuotaAmort=tablaP.find(c=>c.num===p.numero_cuota);
       const propCapital=cuotaAmort?(cuotaAmort.capital/cuotaAmort.cuota):0.5;
       const capDiff=diffMonto*propCapital;
@@ -1108,7 +1293,7 @@ async function eliminarPago(id){
   // Revertir saldo capital del préstamo
   const{data:pre}=await sb.from('prestamos').select('saldo_capital,monto,tasa_mensual,plazo_meses,tipo').eq('id',p.prestamo_id).single();
   if(pre){
-    const tabla=tablaAmort(pre.monto,pre.tasa_mensual,pre.plazo_meses,pre.tipo);
+    const tabla=tablaAmort(pre.monto,pre.tasa_mensual,pre.plazo_meses,pre.tipo,pre.cuota_mensual,pre.cuota_ultima);
     const cuotaAmort=tabla.find(c=>c.num===p.numero_cuota);
     const propCapital=cuotaAmort?(cuotaAmort.capital/cuotaAmort.cuota):0.5;
     const capRevertir=parseFloat(p.monto_pagado)*propCapital;
@@ -1139,7 +1324,7 @@ async function loadReportes(){
   });
 
   const enr=(pres||[]).map(pre=>{
-    const tabla=tablaAmort(pre.monto,pre.tasa_mensual,pre.plazo_meses,pre.tipo);
+    const tabla=tablaAmort(pre.monto,pre.tasa_mensual,pre.plazo_meses,pre.tipo,pre.cuota_mensual,pre.cuota_ultima);
     // Encontrar la próxima cuota con saldo pendiente
     let proxCuota=null;
     for(const c of tabla){
