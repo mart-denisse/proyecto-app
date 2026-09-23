@@ -140,7 +140,7 @@
         <div class="card" style="padding:14px 20px">
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
             <div style="flex:1;min-width:200px">
-              <input type="text" id="mov-search" placeholder="🔍 Buscar por descripción, tipo, monto..." oninput="filtrarMovimientos()" style="width:100%">
+              <input type="text" id="mov-search" placeholder="🔍 Buscar por persona, descripción, tipo, monto..." oninput="filtrarMovimientos()" style="width:100%">
             </div>
             <div>
               <select id="mov-filter-tipo" onchange="filtrarMovimientos()" style="width:160px">
@@ -161,8 +161,8 @@
           </div>
         </div>
         <div class="g3" style="margin-bottom:16px">
-          <div class="metric m-green"><div class="metric-label">Total entradas (filtro)</div><div class="metric-value" id="mf-entradas">—</div></div>
-          <div class="metric m-red"><div class="metric-label">Total salidas (filtro)</div><div class="metric-value" id="mf-salidas">—</div></div>
+          <div class="metric m-green"><div class="metric-label">Total entradas (capital + aportes + intereses)</div><div class="metric-value" id="mf-entradas">—</div></div>
+          <div class="metric m-red"><div class="metric-label">Total salidas (gastos)</div><div class="metric-value" id="mf-salidas">—</div></div>
           <div class="metric"><div class="metric-label">Resultado neto</div><div class="metric-value" id="mf-neto">—</div></div>
         </div>
         <div class="card">
@@ -170,7 +170,7 @@
             <div class="card-title" style="margin:0">Resultados <span id="mf-count" style="color:var(--text3);font-weight:400"></span></div>
           </div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Entrada</th><th>Salida</th><th>Saldo acum.</th><th></th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Tipo</th><th>Persona / Descripción</th><th>Entrada</th><th>Salida</th><th>Saldo acum.</th><th></th></tr></thead>
             <tbody id="mov-tabla"><tr><td colspan="7"><div class="loading"><div class="spinner"></div>Cargando...</div></td></tr></tbody>
           </table></div>
         </div>
@@ -560,7 +560,7 @@ async function getStats(){
     .reduce((s,m)=>s+parseFloat(m.monto||0),0);
 
   const resultadoMes=interesesMes-gastosMes;
-  return{caja,calle,patrimonio:caja+calle,totalCobrado,capitalInicial,gastos,mora,activos,interesesTotal,interesesMes,resultadoMes};
+  return{caja,calle,patrimonio:caja+calle,totalCobrado,capitalInicial,ingresos,gastos,mora,activos,interesesTotal,interesesMes,resultadoMes};
 }
 
 // ===== DASHBOARD =====
@@ -689,9 +689,19 @@ async function eliminarMovimiento(id){
 let _todosMovimientos=[];
 
 async function loadMovimientos(){
-  const{data:movs}=await sb.from('movimientos_caja').select('*').order('fecha').order('created_at');
-  _todosMovimientos=movs||[];
+  const{data:movs}=await sb.from('movimientos_caja').select('*,prestamos(clientes(nombre))').order('fecha').order('created_at');
+  _todosMovimientos=(movs||[]).map(m=>({...m,persona:m.prestamos?.clientes?.nombre||''}));
   filtrarMovimientos();
+  // Totales históricos (no dependen del filtro):
+  // entradas = capital inicial + aportes (ingresos) + intereses cobrados; salidas = gastos
+  const{capitalInicial,ingresos,interesesTotal,gastos}=await getStats();
+  const entradas=capitalInicial+ingresos+interesesTotal;
+  const neto=entradas-gastos;
+  document.getElementById('mf-entradas').textContent=fmt(entradas);
+  document.getElementById('mf-salidas').textContent=fmt(gastos);
+  const elNeto=document.getElementById('mf-neto');
+  elNeto.textContent=(neto<0?'-':'')+fmt(Math.abs(neto));
+  elNeto.style.color=neto>=0?'var(--green)':'var(--red)';
 }
 
 function filtrarMovimientos(){
@@ -705,26 +715,14 @@ function filtrarMovimientos(){
     if(desde&&m.fecha<desde)return false;
     if(hasta&&m.fecha>hasta)return false;
     if(busq){
-      const haystack=[m.descripcion,m.tipo,m.fecha,String(m.monto)].join(' ').toLowerCase();
+      const haystack=[m.persona,m.descripcion,m.tipo,m.fecha,String(m.monto)].join(' ').toLowerCase();
       if(!haystack.includes(busq))return false;
     }
     return true;
   });
 
-  // Calcular totales del filtro
   const lbls={capital_inicial:'Capital inicial',desembolso:'Préstamo otorgado',cobro:'Cobro recibido',ingreso:'Ingreso',gasto:'Gasto',retiro:'Dev. de aporte'};
   const bdgs={capital_inicial:'b-blue',desembolso:'b-blue',cobro:'b-green',ingreso:'b-gray',gasto:'b-red',retiro:'b-yellow'};
-  let entradas=0,salidas=0;
-  filtrados.forEach(m=>{
-    if(['capital_inicial','cobro','ingreso'].includes(m.tipo))entradas+=parseFloat(m.monto);
-    else salidas+=parseFloat(m.monto);
-  });
-  const neto=entradas-salidas;
-  document.getElementById('mf-entradas').textContent=fmt(entradas);
-  document.getElementById('mf-salidas').textContent=fmt(salidas);
-  const elNeto=document.getElementById('mf-neto');
-  elNeto.textContent=fmt(Math.abs(neto));
-  elNeto.style.color=neto>=0?'var(--green)':'var(--red)';
   document.getElementById('mf-count').textContent=`— ${filtrados.length} registro${filtrados.length!==1?'s':''}`;
 
   const tb=document.getElementById('mov-tabla');
@@ -732,20 +730,28 @@ function filtrarMovimientos(){
     tb.innerHTML='<tr><td colspan="7"><div class="empty">Sin resultados para ese filtro.</div></td></tr>';
     return;
   }
-  // Saldo acumulado sobre todos los movimientos (no solo los filtrados) hasta cada fecha
-  // Para eso calculamos el saldo corrido sobre el set filtrado
+  // Saldo corrido sobre el set filtrado, calculado en orden cronológico
+  const saldoMap={};
   let saldo=0;
-  tb.innerHTML=filtrados.map(m=>{
+  filtrados.forEach(m=>{
     const ent=['capital_inicial','cobro','ingreso'].includes(m.tipo);
     saldo+=ent?parseFloat(m.monto):-parseFloat(m.monto);
+    saldoMap[m.id]=saldo;
+  });
+  // Mostrar en orden descendente (más reciente primero)
+  tb.innerHTML=filtrados.slice().reverse().map(m=>{
+    const ent=['capital_inicial','cobro','ingreso'].includes(m.tipo);
     const editable=['ingreso','gasto','retiro'].includes(m.tipo);
+    // Si el movimiento tiene persona (préstamo otorgado o cobro) se muestra la persona; si no, la descripción
+    const notaDesc=(m.descripcion||'').match(/\(desc\. [^)]*\)/)?.[0]||'';
+    const detalle=m.persona?`${m.persona}${notaDesc?` <span style="color:var(--text3)">${notaDesc}</span>`:''}`:m.descripcion;
     return`<tr>
       <td class="mono">${m.fecha}</td>
       <td><span class="badge ${bdgs[m.tipo]||'b-gray'}">${lbls[m.tipo]||m.tipo}</span></td>
-      <td>${m.descripcion}</td>
+      <td>${detalle}</td>
       <td style="color:var(--green)" class="mono">${ent?fmt(m.monto):'—'}</td>
       <td style="color:var(--red)" class="mono">${!ent?fmt(m.monto):'—'}</td>
-      <td class="mono"><b>${fmt(saldo)}</b></td>
+      <td class="mono"><b>${fmt(saldoMap[m.id])}</b></td>
       <td><div class="actions-cell">
         ${editable?`<button class="btn btn-icon btn-sm" onclick="editarMovimiento('${m.id}')">✏️</button>`:''}
         ${editable?`<button class="btn-danger btn btn-icon btn-sm" onclick="eliminarMovimiento('${m.id}')">🗑</button>`:''}
