@@ -288,7 +288,7 @@
             <span class="badge b-red" id="rep-v-monto">—</span>
           </div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Cliente</th><th>Cuota #</th><th>Monto cuota</th><th>Pendiente</th><th>Días vencido</th><th>Fecha cuota</th><th>Teléfono</th></tr></thead>
+            <thead><tr><th>Cliente</th><th>Cuota #</th><th>Monto cuota</th><th>Pendiente</th><th>Días vencido</th><th>Fecha cuota</th><th>Teléfono</th><th></th></tr></thead>
             <tbody id="rep-mora"></tbody>
           </table></div>
         </div>
@@ -298,21 +298,21 @@
             <span class="badge b-yellow" id="rep-m-monto">—</span>
           </div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Cliente</th><th>Cuota #</th><th>Monto cuota</th><th>Días restantes</th><th>Fecha cuota</th><th>Teléfono</th></tr></thead>
+            <thead><tr><th>Cliente</th><th>Cuota #</th><th>Monto cuota</th><th>Días restantes</th><th>Fecha cuota</th><th>Teléfono</th><th></th></tr></thead>
             <tbody id="rep-mes"></tbody>
           </table></div>
         </div>
         <div class="card">
           <div class="card-title">📅 Próximo mes</div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Cliente</th><th>Cuota #</th><th>Monto cuota</th><th>Fecha cuota</th><th>Teléfono</th></tr></thead>
+            <thead><tr><th>Cliente</th><th>Cuota #</th><th>Monto cuota</th><th>Fecha cuota</th><th>Teléfono</th><th></th></tr></thead>
             <tbody id="rep-prox"></tbody>
           </table></div>
         </div>
         <div class="card">
           <div class="card-title">📊 Todos los activos</div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Cliente</th><th>Monto orig.</th><th>Saldo capital</th><th>Próxima cuota</th><th>Monto cuota</th><th>Próxima fecha</th><th>Estado</th></tr></thead>
+            <thead><tr><th>Cliente</th><th>Monto orig.</th><th>Saldo capital</th><th>Próxima cuota</th><th>Monto cuota</th><th>Próxima fecha</th><th>Estado</th><th></th></tr></thead>
             <tbody id="rep-todos"></tbody>
           </table></div>
         </div>
@@ -474,32 +474,48 @@ function cuotaFrancesa(monto,tasa,plazo){
 function tablaAmort(monto,tasa,plazo,tipo,cuotaRegular,cuotaUltima){
   const rows=[]; let saldo=monto;
   if(tipo==='manual'){
-    // Calcular interés implícito total = suma de cuotas − monto prestado
+    // Las cuotas son exactas (definidas por el usuario) — no se redondean
     const cReg=cuotaRegular||monto/plazo;
-    const cUlt=cuotaUltima||cReg;
+    const cUlt=cuotaUltima!=null&&cuotaUltima>0?cuotaUltima:cReg;
     const totalCobrar=cReg*(plazo-1)+cUlt;
     const interesTotal=Math.max(0,totalCobrar-monto);
-    // Distribuir interés proporcional al peso de cada cuota
+    // Distribuir interés proporcional, acumulando sin redondeo intermedio.
+    // El residuo de redondeo va todo a la última cuota para que sum(interes)==interesTotal exacto.
+    let interesAcumulado=0;
     for(let i=1;i<=plazo;i++){
       const esUltima=i===plazo;
-      const cuota=Math.round(esUltima?cUlt:cReg);
-      const pesoInteres=cuota/totalCobrar;
-      const interes=Math.round(interesTotal*pesoInteres);
-      const capital=cuota-interes;
-      saldo=Math.max(0,saldo-capital);
-      rows.push({num:i,capital,interes,cuota,saldo});
+      const cuota=esUltima?cUlt:cReg;
+      let interes;
+      if(esUltima){
+        // Última cuota absorbe el residuo exacto
+        interes=Math.round(interesTotal-interesAcumulado);
+      } else {
+        interes=Math.round(interesTotal*(cuota/totalCobrar));
+        interesAcumulado+=interes;
+      }
+      const capital=Math.round(cuota)-interes;
+      saldo=Math.max(0,Math.round(saldo-capital));
+      rows.push({num:i,capital,interes,cuota:Math.round(cuota),saldo});
     }
     return rows;
   }
+  // Pre-calcular cuota redondeada para que coincida exactamente con la calculadora
+  const cuotaFija=tipo==='frances'
+    ?Math.round(cuotaFrancesa(monto,tasa,plazo))
+    :Math.round(monto/plazo+monto*tasa/100);
   for(let i=1;i<=plazo;i++){
-    let interes,capital,cuota;
+    let interes,capital;
     if(tipo==='frances'){
-      cuota=cuotaFrancesa(monto,tasa,plazo);interes=saldo*tasa/100;capital=cuota-interes;
+      // Interés sobre saldo redondeado para evitar acumulación de decimales
+      interes=Math.round(saldo*tasa/100);
+      capital=cuotaFija-interes;
     } else {
-      interes=monto*tasa/100;capital=monto/plazo;cuota=capital+interes;
+      // Interés simple: siempre sobre el capital original
+      interes=Math.round(monto*tasa/100);
+      capital=cuotaFija-interes;
     }
-    saldo=Math.max(0,saldo-capital);
-    rows.push({num:i,capital,interes,cuota:Math.round(cuota),saldo});
+    saldo=Math.max(0,Math.round(saldo-capital));
+    rows.push({num:i,capital,interes,cuota:cuotaFija,saldo});
   }
   return rows;
 }
@@ -508,10 +524,12 @@ function tablaAmort(monto,tasa,plazo,tipo,cuotaRegular,cuotaUltima){
 async function getStats(){
   const [{data:movs},{data:pres},{data:pagos}]=await Promise.all([
     sb.from('movimientos_caja').select('tipo,monto,fecha').order('fecha'),
-    sb.from('prestamos').select('id,saldo_capital,estado,monto,tasa_mensual,plazo_meses,tipo,fecha_inicio'),
-    sb.from('pagos').select('monto_pagado,fecha,numero_cuota,prestamo_id')
+    sb.from('prestamos').select('id,saldo_capital,estado,monto,tasa_mensual,plazo_meses,tipo,fecha_inicio,cuota_mensual,cuota_ultima'),
+    sb.from('pagos').select('monto_pagado,fecha,numero_cuota,prestamo_id,descuento')
   ]);
-  let capitalInicial=0,ingresos=0,gastos=0,desembolsos=0,retiros=0;
+  // La CAJA se calcula 100% desde movimientos_caja — fuente única de verdad del dinero físico.
+  // Los cobros en movimientos_caja ya son netos (monto_pagado − descuento) — no hay que restarlos de nuevo.
+  let capitalInicial=0,ingresos=0,gastos=0,desembolsos=0,retiros=0,cobrosCaja=0;
   (movs||[]).forEach(m=>{
     const v=parseFloat(m.monto);
     if(m.tipo==='capital_inicial')capitalInicial=v;
@@ -519,21 +537,41 @@ async function getStats(){
     else if(m.tipo==='gasto')gastos+=v;
     else if(m.tipo==='desembolso')desembolsos+=v;
     else if(m.tipo==='retiro')retiros+=v;
+    else if(m.tipo==='cobro')cobrosCaja+=v;
   });
-  const totalCobrado=(pagos||[]).reduce((s,p)=>s+parseFloat(p.monto_pagado||0),0);
-  // Calcular intereses: diferencia entre lo cobrado y el capital descontado
-  // Usamos proporción de la tabla de amortización por cada pago
-  const caja=capitalInicial+ingresos+totalCobrado-gastos-retiros-desembolsos;
+  const caja=capitalInicial+ingresos+cobrosCaja-gastos-retiros-desembolsos;
   const activos=(pres||[]).filter(p=>p.estado!=='cancelado');
   const calle=activos.reduce((s,p)=>s+parseFloat(p.saldo_capital||0),0);
   const mora=(pres||[]).filter(p=>p.estado==='mora');
 
-  // Intereses = total cobrado − capital recuperado
-  // Capital recuperado = monto original − saldo actual de todos los préstamos
-  const totalCapitalOriginal=(pres||[]).reduce((s,p)=>s+parseFloat(p.monto||0),0);
-  const totalSaldoActual=(pres||[]).reduce((s,p)=>s+parseFloat(p.saldo_capital||0),0);
-  const capitalRecuperado=totalCapitalOriginal-totalSaldoActual;
-  const interesesTotal=Math.max(0,totalCobrado-capitalRecuperado);
+  // INTERESES GANADOS: por cada pago registrado, buscar el interés real de esa cuota en la tabla.
+  // Se usa la proporción pagada de la cuota para asignar interés exacto.
+  // Esto respeta los montos exactos del préstamo manual y no depende de capital recuperado.
+  // Los descuentos se reflejan automáticamente porque reducen monto_pagado vs monto_cuota.
+  let interesesTotal=0;
+  // Agrupar pagos por préstamo
+  const pagosPorPrestamo={};
+  (pagos||[]).forEach(p=>{
+    if(!pagosPorPrestamo[p.prestamo_id])pagosPorPrestamo[p.prestamo_id]=[];
+    pagosPorPrestamo[p.prestamo_id].push(p);
+  });
+  for(const pre of (pres||[])){
+    const tabla=tablaAmort(pre.monto,pre.tasa_mensual,pre.plazo_meses,pre.tipo,pre.cuota_mensual,pre.cuota_ultima);
+    const pgsPre=pagosPorPrestamo[pre.id]||[];
+    for(const pg of pgsPre){
+      const cuotaAmort=tabla.find(c=>c.num===pg.numero_cuota);
+      if(!cuotaAmort||!cuotaAmort.cuota)continue;
+      // Si lo pagado (neto de descuento) >= cuota, cuota completa → interés completo de la tabla.
+      // Si es parcial → interés proporcional.
+      // Esto evita que pagos con monto_pagado ligeramente distinto a la cuota (por redondeos históricos)
+      // generen centavos extra de interés.
+      const montoPagadoNeto=Math.max(0,parseFloat(pg.monto_pagado||0)-parseFloat(pg.descuento||0));
+      const cuotaExacta=cuotaAmort.cuota;
+      const proporcion=montoPagadoNeto>=cuotaExacta?1:montoPagadoNeto/cuotaExacta;
+      interesesTotal+=cuotaAmort.interes*proporcion;
+    }
+  }
+  interesesTotal=Math.round(interesesTotal);
 
   // Intereses este mes = suma del interés de cada cuota que vence en el mes actual
   // de todos los préstamos activos, sin importar si ya se cobró o no
@@ -560,7 +598,7 @@ async function getStats(){
     .reduce((s,m)=>s+parseFloat(m.monto||0),0);
 
   const resultadoMes=interesesMes-gastosMes;
-  return{caja,calle,patrimonio:caja+calle,totalCobrado,capitalInicial,ingresos,gastos,mora,activos,interesesTotal,interesesMes,resultadoMes};
+  return{caja,calle,patrimonio:caja+calle,totalCobrado:cobrosCaja,capitalInicial,ingresos,gastos,mora,activos,interesesTotal,interesesMes,resultadoMes};
 }
 
 // ===== DASHBOARD =====
@@ -1363,32 +1401,72 @@ async function loadReportes(){
   const fd=d=>d.toLocaleDateString('es-PY',{day:'2-digit',month:'2-digit',year:'numeric'});
   const ph=t=>`<a href="tel:${t||''}" style="color:var(--accent)">${t||'—'}</a>`;
 
-  document.getElementById('rep-mora').innerHTML=!venc.length?'<tr><td colspan="7"><div class="empty">🎉 Sin vencidos.</div></td></tr>':venc.sort((a,b)=>a.dias-b.dias).map(p=>`<tr>
+  const btnFecha=(preId,cuotaNum,fechaCuota)=>`<button class="btn btn-sm btn-icon" title="Cambiar fecha de cuota" onclick="cambiarFechaCuota('${preId}',${cuotaNum},'${fechaCuota.toISOString().split('T')[0]}')">📅</button>`;
+
+  document.getElementById('rep-mora').innerHTML=!venc.length?'<tr><td colspan="8"><div class="empty">🎉 Sin vencidos.</div></td></tr>':venc.sort((a,b)=>a.dias-b.dias).map(p=>`<tr>
     <td><b>${p.clientes?.nombre}</b></td><td class="mono">${p.proxCuota.num}</td>
     <td class="mono">${fmt(p.proxCuota.cuota)}</td><td class="mono" style="color:var(--red)">${fmt(p.proxCuota.pendiente)}</td>
     <td><span class="badge b-red">${Math.abs(p.dias)} días</span></td>
     <td class="mono">${fd(p.fechaCuota)}</td><td>${ph(p.clientes?.telefono)}</td>
+    <td>${btnFecha(p.id,p.proxCuota.num,p.fechaCuota)}</td>
   </tr>`).join('');
 
-  document.getElementById('rep-mes').innerHTML=!mes.length?'<tr><td colspan="6"><div class="empty">Sin vencimientos este mes.</div></td></tr>':mes.sort((a,b)=>a.dias-b.dias).map(p=>{
+  document.getElementById('rep-mes').innerHTML=!mes.length?'<tr><td colspan="7"><div class="empty">Sin vencimientos este mes.</div></td></tr>':mes.sort((a,b)=>a.dias-b.dias).map(p=>{
     const u=p.dias<=3?'b-red':p.dias<=7?'b-yellow':'b-blue';
     return`<tr><td><b>${p.clientes?.nombre}</b></td><td class="mono">${p.proxCuota.num}</td><td class="mono">${fmt(p.proxCuota.pendiente)}</td>
     <td><span class="badge ${u}">${p.dias===0?'Hoy':p.dias===1?'Mañana':'En '+p.dias+' días'}</span></td>
-    <td class="mono">${fd(p.fechaCuota)}</td><td>${ph(p.clientes?.telefono)}</td></tr>`;
+    <td class="mono">${fd(p.fechaCuota)}</td><td>${ph(p.clientes?.telefono)}</td>
+    <td>${btnFecha(p.id,p.proxCuota.num,p.fechaCuota)}</td></tr>`;
   }).join('');
 
-  document.getElementById('rep-prox').innerHTML=!prox.length?'<tr><td colspan="5"><div class="empty">Sin vencimientos próximo mes.</div></td></tr>':prox.sort((a,b)=>a.fechaCuota-b.fechaCuota).map(p=>`<tr>
+  document.getElementById('rep-prox').innerHTML=!prox.length?'<tr><td colspan="6"><div class="empty">Sin vencimientos próximo mes.</div></td></tr>':prox.sort((a,b)=>a.fechaCuota-b.fechaCuota).map(p=>`<tr>
     <td><b>${p.clientes?.nombre}</b></td><td class="mono">${p.proxCuota.num}</td>
     <td class="mono">${fmt(p.proxCuota.pendiente)}</td><td class="mono">${fd(p.fechaCuota)}</td><td>${ph(p.clientes?.telefono)}</td>
+    <td>${btnFecha(p.id,p.proxCuota.num,p.fechaCuota)}</td>
   </tr>`).join('');
 
-  document.getElementById('rep-todos').innerHTML=!enr.length?'<tr><td colspan="7"><div class="empty">Sin activos.</div></td></tr>':enr.sort((a,b)=>a.dias-b.dias).map(p=>{
+  document.getElementById('rep-todos').innerHTML=!enr.length?'<tr><td colspan="8"><div class="empty">Sin activos.</div></td></tr>':enr.sort((a,b)=>a.dias-b.dias).map(p=>{
     const b=p.dias<0?'b-red':p.dias<=7?'b-yellow':'b-blue';
     const l=p.dias<0?'Vencido':p.dias===0?'Hoy':'En '+p.dias+' días';
     return`<tr><td><b>${p.clientes?.nombre}</b></td><td class="mono">${fmt(p.monto)}</td><td class="mono">${fmt(p.saldo_capital)}</td>
     <td class="mono">${p.proxCuota.num}</td><td class="mono">${fmt(p.proxCuota.pendiente)}</td>
-    <td class="mono">${fd(p.fechaCuota)}</td><td><span class="badge ${b}">${l}</span></td></tr>`;
+    <td class="mono">${fd(p.fechaCuota)}</td><td><span class="badge ${b}">${l}</span></td>
+    <td>${btnFecha(p.id,p.proxCuota.num,p.fechaCuota)}</td></tr>`;
   }).join('');
+}
+
+async function cambiarFechaCuota(preId,cuotaNum,fechaActual){
+  // La fecha de cada cuota se deriva de fecha_inicio + num meses.
+  // Para cambiarla, ajustamos la fecha_inicio del préstamo.
+  // Si cuota #N vence en una fecha distinta, nueva fecha_inicio = nueva_fecha − N meses.
+  openModal(`Cambiar fecha — cuota #${cuotaNum}`,`
+    <div class="form-group">
+      <label class="form-label">Nueva fecha de vencimiento para la cuota #${cuotaNum}</label>
+      <input type="date" id="nf-fecha" value="${fechaActual}">
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-top:8px">
+      ⚠️ Esto ajusta la <b>fecha de inicio del préstamo</b> para que la cuota #${cuotaNum} caiga en la fecha indicada. Todas las demás cuotas se recalcularán proporcionalmente.
+    </div>
+    <div class="form-actions" style="margin-top:16px">
+      <button class="btn btn-primary" onclick="window._modalSave()">💾 Guardar</button>
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+    </div>
+  `,async()=>{
+    const nuevaFechaCuota=new Date(document.getElementById('nf-fecha').value+'T00:00:00');
+    if(isNaN(nuevaFechaCuota.getTime())){toast('Fecha inválida.','err');return;}
+    // nueva fecha_inicio = nueva fecha cuota − cuotaNum meses
+    const nuevaInicio=new Date(nuevaFechaCuota);
+    nuevaInicio.setMonth(nuevaInicio.getMonth()-cuotaNum);
+    const yyyy=nuevaInicio.getFullYear();
+    const mm=String(nuevaInicio.getMonth()+1).padStart(2,'0');
+    const dd=String(nuevaInicio.getDate()).padStart(2,'0');
+    const fechaInicioStr=`${yyyy}-${mm}-${dd}`;
+    const{error}=await sb.from('prestamos').update({fecha_inicio:fechaInicioStr}).eq('id',preId);
+    if(error){toast('Error: '+error.message,'err');return;}
+    toast('Fecha actualizada ✓','ok');
+    closeModal();
+    loadReportes();
+  });
 }
 
 // ===== CALCULADORA =====
